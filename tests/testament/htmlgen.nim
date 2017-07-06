@@ -174,7 +174,7 @@ proc generateTestRunTabListItemPartial(outfile: File, testRunRow: Row, firstRow 
       "machineName", machineName
     ])
 
-proc generateTestResultPanelPartial(outfile: File, testResultRow: Row) =
+proc generateTestResultPanelPartial(outfile: File, testResultRow: Row, onlyFailing = false) =
   let
     trId = testResultRow[0]
     name = testResultRow[1].htmlQuote()
@@ -188,12 +188,16 @@ proc generateTestResultPanelPartial(outfile: File, testResultRow: Row) =
   var panelCtxClass, textCtxClass, bgCtxClass, resultSign, resultDescription: string
   case result
   of "reSuccess":
+    if onlyFailing:
+      return
     panelCtxClass = "success"
     textCtxClass = "success"
     bgCtxClass = "success"
     resultSign = "ok"
     resultDescription = "PASS"
   of "reIgnored":
+    if onlyFailing:
+      return
     panelCtxClass = "info"
     textCtxClass = "info"
     bgCtxClass = "info"
@@ -229,7 +233,7 @@ proc generateTestResultPanelPartial(outfile: File, testResultRow: Row) =
       "resultDescription", resultDescription
   ])
 
-proc generateTestResultsPanelGroupParial(outfile: File, db: DbConn, commitid, machineid: string) =
+proc generateTestResultsPanelGroupParial(outfile: File, db: DbConn, commitid, machineid: string, onlyFailing = false) =
   const testResultsSelect = sql"""
 SELECT [tr].[id]
   , [tr].[name]
@@ -244,9 +248,9 @@ FROM [TestResult] AS [tr]
 WHERE [tr].[commit] = ?
   AND [tr].[machine] = ?"""
   for testresultRow in db.rows(testResultsSelect, commitid, machineid):
-    generateTestResultPanelPartial(outfile, testresultRow)
+    generateTestResultPanelPartial(outfile, testresultRow, onlyFailing)
 
-proc generateTestRunTabContentPartial(outfile: File, db: DbConn, testRunRow: Row, firstRow = false) =
+proc generateTestRunTabContentPartial(outfile: File, db: DbConn, testRunRow: Row, onlyFailing = false, firstRow = false) =
   let
     firstTabActiveClass = if firstRow: " in active"
                           else: ""
@@ -295,11 +299,11 @@ WHERE [tr].[commit] = ?
       "failedPercentage", formatBiggestFloat(failedPercentage, ffDecimal, 2) & "%",
     ])
 
-  generateTestResultsPanelGroupParial(outfile, db, commitId, machineId)
+  generateTestResultsPanelGroupParial(outfile, db, commitId, machineId, onlyFailing)
   
   outfile.writeLine(html_tabpage_end)
 
-proc generateTestRunsHtmlPartial(outfile: File, db: DbConn) =
+proc generateTestRunsHtmlPartial(outfile: File, db: DbConn, onlyFailing = false) =
   const testrunSelect = sql"""
 SELECT [c].[id] AS [CommitId]
   , [c].[hash] as [Hash]
@@ -337,7 +341,7 @@ ORDER BY [c].[id] DESC
     let testresultcount = testRunRow[7].parseBiggestInt()
     if testresultcount <= 0:
       continue
-    generateTestRunTabContentPartial(outfile, db, testRunRow, firstRow)
+    generateTestRunTabContentPartial(outfile, db, testRunRow, onlyFailing, firstRow)
     if firstRow:
       firstRow = false
   outfile.writeLine(html_tabcontents_end)
@@ -349,7 +353,7 @@ proc generateHtml*(filename: string, commit: int; onlyFailing: bool) =
 
   outfile.generateHtmlBegin()
 
-  generateTestRunsHtmlPartial(outfile, db)
+  generateTestRunsHtmlPartial(outfile, db, onlyFailing)
 
   outfile.writeLine(html_end)
   
