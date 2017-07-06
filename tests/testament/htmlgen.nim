@@ -312,13 +312,13 @@ SELECT [c].[id] AS [CommitId]
   , [m].[name] AS [MachineName]
   , [m].[os] AS [OS]
   , [m].[cpu] AS [CPU]
-  , (
+FROM [Commit] AS [c], [Machine] AS [m]
+WHERE (
     SELECT COUNT(*)
     FROM [TestResult] AS [tr]
     WHERE [tr].[commit] = [c].[id]
       AND [tr].[machine] = [m].[id]
-  ) AS [TestResultCount]
-FROM [Commit] AS [c], [Machine] AS [m]
+  ) > 0
 ORDER BY [c].[id] DESC
 """
   # Iterating the results twice, get entire result set in one go
@@ -327,9 +327,6 @@ ORDER BY [c].[id] DESC
   outfile.writeLine(html_tablist_begin)
   var firstRow = true
   for testRunRow in testRunRowSeq:
-    let testresultcount = testRunRow[7].parseBiggestInt()
-    if testresultcount <= 0:
-      continue
     generateTestRunTabListItemPartial(outfile, testRunRow, firstRow)
     if firstRow:
       firstRow = false
@@ -338,9 +335,6 @@ ORDER BY [c].[id] DESC
   outfile.writeLine(html_tabcontents_begin)
   firstRow = true
   for testRunRow in testRunRowSeq:
-    let testresultcount = testRunRow[7].parseBiggestInt()
-    if testresultcount <= 0:
-      continue
     generateTestRunTabContentPartial(outfile, db, testRunRow, onlyFailing, firstRow)
     if firstRow:
       firstRow = false
