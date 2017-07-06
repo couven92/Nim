@@ -9,157 +9,359 @@
 
 ## HTML generator for the tester.
 
-import db_sqlite, cgi, backend, strutils, json
+import db_sqlite, cgi, backend, strutils, json, jquery, bootstrap
+
+proc htmlQuote(raw: string): string =
+  if (raw.isNil):
+    return nil
+  result = raw
+  result = result.replace("&", "&amp;")
+  result = result.replace("\"", "&quot;")
+  result = result.replace("'", "&apos;")
+  result = result.replace("<", "&lt;")
+  result = result.replace(">", "&gt;")
 
 const
-  TableHeader = """<table border="1">
-                      <tr><td>Test</td><td>Category</td><td>Target</td>
-                          <td>Action</td>
-                          <td>Expected</td>
-                          <td>Given</td>
-                          <td>Success</td></tr>"""
-  TableFooter = "</table>"
-  HtmlBegin = """<html>
-    <head>
-      <title>Test results</title>
-      <style type="text/css">
-      <!--""" & slurp("css/boilerplate.css") & "\n" &
-                slurp("css/style.css") &
-      """
-ul#tabs { list-style-type: none; margin: 30px 0 0 0; padding: 0 0 0.3em 0; }
-ul#tabs li { display: inline; }
-ul#tabs li a { color: #42454a; background-color: #dedbde;
-               border: 1px solid #c9c3ba; border-bottom: none;
-               padding: 0.3em; text-decoration: none; }
-ul#tabs li a:hover { background-color: #f1f0ee; }
-ul#tabs li a.selected { color: #000; background-color: #f1f0ee;
-                        font-weight: bold; padding: 0.7em 0.3em 0.38em 0.3em; }
-div.tabContent { border: 1px solid #c9c3ba;
-                 padding: 0.5em; background-color: #f1f0ee; }
-div.tabContent.hide { display: none; }
-      -->
-    </style>
-    <script>
+  html_begin_1 = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Testament Test Results</title>""" 
+  html_begin_2 = """
+</head>
+<body>
+    <div class="container">
+        <h1>Testament Test Results <small>Nim Tester</small></h1>"""
+  html_tablist_begin = """
+        <ul class="nav nav-tabs" role="tablist">"""
+  html_tablistitem_format = """
+            <li role="presentation" class="$firstTabActiveClass">
+                <a href="#tab-commit-$commitId-machine-$machineId" aria-controls="tab-commit-$commitId-machine-$machineId" role="tab" data-toggle="tab">
+                    $branch#$hash@$machineName
+                </a>
+            </li>"""
+  html_tablist_end = """
+        </ul>"""
+  html_tabcontents_begin = """
+        <div class="tab-content">"""
+  html_tabpage_begin_format = """
+            <div id="tab-commit-$commitId-machine-$machineId" class="tab-pane fade$firstTabActiveClass" role="tabpanel">
+                <h2>$branch#$hash@$machineName</h2>
+                <dl class="dl-horizontal">
+                    <dt>Branch</dt>
+                    <dd>$branch</dd>
+                    <dt>Commit Hash</dt>
+                    <dd><code>$hash</code></dd>
+                    <dt>Machine Name</dt>
+                    <dd>$machineName</dd>
+                    <dt>OS</dt>
+                    <dd>$os</dd>
+                    <dt title="CPU Architecture">CPU</dt>
+                    <dd>$cpu</dd>
+                    <dt>All Tests</dt>
+                    <dd>
+                        <span class="glyphicon glyphicon-th-list"></span>
+                        $totalCount
+                    </dd>
+                    <dt>Successful Tests</dt>
+                    <dd>
+                        <span class="glyphicon glyphicon-ok-sign"></span>
+                        $successCount ($successPercentage)
+                    </dd>
+                    <dt>Skipped Tests</dt>
+                    <dd>
+                        <span class="glyphicon glyphicon-question-sign"></span>
+                        $ignoredCount ($ignoredPercentage)
+                    </dd>
+                    <dt>Failed Tests</dt>
+                    <dd>
+                        <span class="glyphicon glyphicon-exclamation-sign"></span>
+                        $failedCount ($failedPercentage)
+                    </dd>
+                </dl>
+                <div class="panel-group">"""
+  html_testresult_panel_format = """
+                    <div id="panel-testResult-$trId" class="panel panel-$panelCtxClass">
+                        <div class="panel-heading" style="cursor:pointer" data-toggle="collapse" data-target="#panel-body-testResult-$trId" aria-controls="panel-body-testResult-$trId" aria-expanded="false">
+                            <div class="row">
+                                <h4 class="col-xs-3 col-sm-1 panel-title">
+                                    <span class="glyphicon glyphicon-$resultSign-sign"></span>
+                                    <strong>$resultDescription</strong>
+                                </h4>
+                                <h4 class="col-xs-1 panel-title"><span class="badge">$target</span></h4>
+                                <h4 class="col-xs-5 col-sm-7 panel-title" title="$name"><code class="text-$textCtxClass">$name</code></h4>
+                                <h4 class="col-xs-3 col-sm-3 panel-title text-right"><span class="badge">$category</span></h4>
+                            </div>
+                        </div>
+                        <div id="panel-body-testResult-$trId" class="panel-body collapse bg-$bgCtxClass">
+                            <dl class="dl-horizontal">
+                                <dt>Name</dt>
+                                <dd><code class="text-$textCtxClass">$name</code></dd>
+                                <dt>Category</dt>
+                                <dd><span class="badge">$category</span></dd>
+                                <dt>Timestamp</dt>
+                                <dd>$timestamp</dd>
+                                <dt>Nim Action</dt>
+                                <dd><code class="text-$textCtxClass">$action</code></dd>
+                                <dt>Nim Backend Target</dt>
+                                <dd><span class="badge">$target</span></dd>
+                                <dt>Code</dt>
+                                <dd><code class="text-$textCtxClass">$result</code></dd>
+                            </dl>
+                            $outputDetails
+                        </div>
+                    </div>"""
+  html_testresult_output_format = """
+                            <div class="table-responsive">
+                                <table class="table table-condensed">
+                                    <thead>
+                                        <tr>
+                                            <th>Expected</th>
+                                            <th>Actual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><pre>$expected</pre></td>
+                                            <td><pre>$gotten</pre></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>"""
+  html_testresult_no_output = """
+                            <p class="sr-only">No output details</p>"""
+  html_tabpage_end = """
+                </div>
+            </div>"""
+  html_tabcontents_end = """
+        </div>"""
+  html_end = """
+    </div>
+</body>
+</html>"""
 
-    var tabLinks = new Array();
-    var contentDivs = new Array();
+proc generateHtmlBegin(outfile: File) =
+  outfile.writeLine(html_begin_1)
+  for part in jquery_script_tag:
+    outfile.write(part)
+  for part in bootstrap_script_tag:
+    outfile.write(part)
+  for part in glyphicons_halflings_regular_style_tag:
+    outfile.write(part)
+  for part in bootstrap_style_tag:
+    outfile.write(part)
+  for part in bootstrap_theme_style_tag:
+    outfile.write(part)
+  outfile.writeLine(html_begin_2)
 
-    function init() {
-      // Grab the tab links and content divs from the page
-      var tabListItems = document.getElementById('tabs').childNodes;
-      for (var i = 0; i < tabListItems.length; i++) {
-        if (tabListItems[i].nodeName == "LI") {
-          var tabLink = getFirstChildWithTagName(tabListItems[i], 'A');
-          var id = getHash(tabLink.getAttribute('href'));
-          tabLinks[id] = tabLink;
-          contentDivs[id] = document.getElementById(id);
-        }
-      }
-      // Assign onclick events to the tab links, and
-      // highlight the first tab
-      var i = 0;
-      for (var id in tabLinks) {
-        tabLinks[id].onclick = showTab;
-        tabLinks[id].onfocus = function() { this.blur() };
-        if (i == 0) tabLinks[id].className = 'selected';
-        i++;
-      }
-      // Hide all content divs except the first
-      var i = 0;
-      for (var id in contentDivs) {
-        if (i != 0) contentDivs[id].className = 'tabContent hide';
-        i++;
-      }
-    }
+proc generateTestRunTabListItemPartial(outfile: File, testRunRow: Row, firstRow = false) =
+  let
+    firstTabActiveClass = if firstRow: "active"
+                          else: ""
+    commitId = testRunRow[0]
+    hash = htmlQuote(testRunRow[1])
+    branch = htmlQuote(testRunRow[2])
+    machineId = testRunRow[3]
+    machineName = htmlQuote(testRunRow[4])
 
-    function showTab() {
-      var selectedId = getHash(this.getAttribute('href'));
+  outfile.writeLine(html_tablistitem_format % [
+      "firstTabActiveClass", firstTabActiveClass,
+      "commitId", commitId,
+      "machineId", machineId,
+      "branch", branch,
+      "hash", hash,
+      "machineName", machineName
+    ])
 
-      // Highlight the selected tab, and dim all others.
-      // Also show the selected content div, and hide all others.
-      for (var id in contentDivs) {
-        if (id == selectedId) {
-          tabLinks[id].className = 'selected';
-          contentDivs[id].className = 'tabContent';
-        } else {
-          tabLinks[id].className = '';
-          contentDivs[id].className = 'tabContent hide';
-        }
-      }
-      // Stop the browser following the link
-      return false;
-    }
+proc generateTestResultPanelPartial(outfile: File, testResultRow: Row) =
+  let
+    trId = testResultRow[0]
+    name = testResultRow[1].htmlQuote()
+    category = testResultRow[2].htmlQuote()
+    target = testResultRow[3].htmlQuote()
+    action = testResultRow[4].htmlQuote()
+    result = testResultRow[5]
+    expected = testResultRow[6]
+    gotten = testResultRow[7]
+    timestamp = testResultRow[8]
+  var panelCtxClass, textCtxClass, bgCtxClass, resultSign, resultDescription: string
+  case result
+  of "reSuccess":
+    panelCtxClass = "success"
+    textCtxClass = "success"
+    bgCtxClass = "success"
+    resultSign = "ok"
+    resultDescription = "PASS"
+  of "reIgnored":
+    panelCtxClass = "info"
+    textCtxClass = "info"
+    bgCtxClass = "info"
+    resultSign = "question"
+    resultDescription = "SKIP"
+  else:
+    panelCtxClass = "danger"
+    textCtxClass = "danger"
+    bgCtxClass = "danger"
+    resultSign = "exclamation"
+    resultDescription = "FAIL"
 
-    function getFirstChildWithTagName(element, tagName) {
-      for (var i = 0; i < element.childNodes.length; i++) {
-        if (element.childNodes[i].nodeName == tagName) return element.childNodes[i];
-      }
-    }
-    function getHash(url) {
-      var hashPos = url.lastIndexOf('#');
-      return url.substring(hashPos + 1);
-    }
-    </script>
+  let outputDetails = if expected.isNilOrWhitespace() and gotten.isNilOrWhitespace():
+                        html_testresult_no_output
+                      else:
+                        html_testresult_output_format % [
+                          "expected", expected.strip().htmlQuote,
+                          "gotten", gotten.strip().htmlQuote
+                        ]
+  outfile.writeLine(html_testresult_panel_format % [
+      "trId", trId,
+      "name", name,
+      "category", category,
+      "target", target,
+      "action", action,
+      "result", result.htmlQuote(),
+      "timestamp", timestamp,
+      "outputDetails", outputDetails,
+      "panelCtxClass", panelCtxClass,
+      "textCtxClass", textCtxClass,
+      "bgCtxClass", bgCtxClass,
+      "resultSign", resultSign,
+      "resultDescription", resultDescription
+  ])
 
-    </head>
-    <body onload="init()">"""
+proc generateTestResultsPanelGroupParial(outfile: File, db: DbConn, commitid, machineid: string) =
+  const testResultsSelect = sql"""
+SELECT [tr].[id]
+  , [tr].[name]
+  , [tr].[category]
+  , [tr].[target]
+  , [tr].[action]
+  , [tr].[result]
+  , [tr].[expected]
+  , [tr].[given]
+  , [tr].[created]
+FROM [TestResult] AS [tr]
+WHERE [tr].[commit] = ?
+  AND [tr].[machine] = ?"""
+  for testresultRow in db.rows(testResultsSelect, commitid, machineid):
+    generateTestResultPanelPartial(outfile, testresultRow)
 
-  HtmlEnd = "</body></html>"
+proc generateTestRunTabContentPartial(outfile: File, db: DbConn, testRunRow: Row, firstRow = false) =
+  let
+    firstTabActiveClass = if firstRow: " in active"
+                          else: ""
+    commitId = testRunRow[0]
+    hash = htmlQuote(testRunRow[1])
+    branch = htmlQuote(testRunRow[2])
+    machineId = testRunRow[3]
+    machineName = htmlQuote(testRunRow[4])
+    os = htmlQuote(testRunRow[5])
+    cpu = htmlQuote(testRunRow[6])
 
-proc td(s: string): string =
-  result = "<td>" & s.substr(0, 200).xmlEncode & "</td>"
+  const
+    totalClause = """
+SELECT COUNT(*)
+FROM [TestResult] AS [tr]
+WHERE [tr].[commit] = ?
+  AND [tr].[machine] = ?"""
+    successClause = totalClause & "\L" & """
+  AND [tr].[result] LIKE 'reSuccess'"""
+    ignoredClause = totalClause & "\L" & """
+  AND [tr].[result] LIKE 'reIgnored'"""
+  let
+    totalCount = db.getValue(sql(totalClause), commitId, machineId).parseBiggestInt()
+    successCount = db.getValue(sql(successClause), commitId, machineId).parseBiggestInt()
+    successPercentage = 100 * (successCount.toBiggestFloat() / totalCount.toBiggestFloat())
+    ignoredCount = db.getValue(sql(ignoredClause), commitId, machineId).parseBiggestInt()
+    ignoredPercentage = 100 * (ignoredCount.toBiggestFloat() / totalCount.toBiggestFloat())
+    failedCount = totalCount - successCount - ignoredCount
+    failedPercentage = 100 * (failedCount.toBiggestFloat() / totalCount.toBiggestFloat())
+
+  outfile.writeLine(html_tabpage_begin_format % [
+      "firstTabActiveClass", firstTabActiveClass,
+      "commitId", commitId,
+      "machineId", machineId,
+      "branch", branch,
+      "hash", hash,
+      "machineName", machineName,
+      "os", os,
+      "cpu", cpu,
+      "totalCount", $totalCount,
+      "successCount", $successCount,
+      "successPercentage", formatBiggestFloat(successPercentage, ffDecimal, 2) & "%",
+      "ignoredCount", $ignoredCount,
+      "ignoredPercentage", formatBiggestFloat(ignoredPercentage, ffDecimal, 2) & "%",
+      "failedCount", $failedCount,
+      "failedPercentage", formatBiggestFloat(failedPercentage, ffDecimal, 2) & "%",
+    ])
+
+  generateTestResultsPanelGroupParial(outfile, db, commitId, machineId)
+  
+  outfile.writeLine(html_tabpage_end)
+
+proc generateTestRunsHtmlPartial(outfile: File, db: DbConn) =
+  const testrunSelect = sql"""
+SELECT [c].[id] AS [CommitId]
+  , [c].[hash] as [Hash]
+  , [c].[branch] As [Branch]
+  , [m].[id] AS [MachineId]
+  , [m].[name] AS [MachineName]
+  , [m].[os] AS [OS]
+  , [m].[cpu] AS [CPU]
+  , (
+    SELECT COUNT(*)
+    FROM [TestResult] AS [tr]
+    WHERE [tr].[commit] = [c].[id]
+      AND [tr].[machine] = [m].[id]
+  ) AS [TestResultCount]
+FROM [Commit] AS [c], [Machine] AS [m]
+ORDER BY [c].[id] DESC
+"""
+  # Iterating the results twice, get entire result set in one go
+  var testRunRowSeq = db.getAllRows(testrunSelect)
+
+  outfile.writeLine(html_tablist_begin)
+  var firstRow = true
+  for testRunRow in testRunRowSeq:
+    let testresultcount = testRunRow[7].parseBiggestInt()
+    if testresultcount <= 0:
+      continue
+    generateTestRunTabListItemPartial(outfile, testRunRow, firstRow)
+    if firstRow:
+      firstRow = false
+  outfile.writeLine(html_tablist_end)
+
+  outfile.writeLine(html_tabcontents_begin)
+  firstRow = true
+  for testRunRow in testRunRowSeq:
+    let testresultcount = testRunRow[7].parseBiggestInt()
+    if testresultcount <= 0:
+      continue
+    generateTestRunTabContentPartial(outfile, db, testRunRow, firstRow)
+    if firstRow:
+      firstRow = false
+  outfile.writeLine(html_tabcontents_end)
+
+proc generateHtml*(filename: string, commit: int; onlyFailing: bool) =
+  var db = open(connection="testament.db", user="testament", password="",
+                database="testament")
+  var outfile = open(filename, fmWrite)
+
+  outfile.generateHtmlBegin()
+
+  generateTestRunsHtmlPartial(outfile, db)
+
+  outfile.writeLine(html_end)
+  
+  outfile.flushFile()
+  close(outfile)
+  close(db)
 
 proc getCommit(db: DbConn, c: int): string =
   var commit = c
   for thisCommit in db.rows(sql"select id from [Commit] order by id desc"):
     if commit == 0: result = thisCommit[0]
     inc commit
-
-proc generateHtml*(filename: string, commit: int; onlyFailing: bool) =
-  const selRow = """select name, category, target, action,
-                           expected, given, result
-                    from TestResult
-                    where [commit] = ? and machine = ?
-                    order by category"""
-  var db = open(connection="testament.db", user="testament", password="",
-                database="testament")
-  # search for proper commit:
-  let lastCommit = db.getCommit(commit)
-
-  var outfile = open(filename, fmWrite)
-  outfile.write(HtmlBegin)
-
-  let commit = db.getValue(sql"select hash from [Commit] where id = ?",
-                            lastCommit)
-  let branch = db.getValue(sql"select branch from [Commit] where id = ?",
-                            lastCommit)
-  outfile.write("<p><b>$# $#</b></p>" % [branch, commit])
-
-  # generate navigation:
-  outfile.write("""<ul id="tabs">""")
-  for m in db.rows(sql"select id, name, os, cpu from Machine order by id"):
-    outfile.writeLine """<li><a href="#$#">$#: $#, $#</a></li>""" % m
-  outfile.write("</ul>")
-
-  for currentMachine in db.rows(sql"select id from Machine order by id"):
-    let m = currentMachine[0]
-    outfile.write("""<div class="tabContent" id="$#">""" % m)
-
-    outfile.write(TableHeader)
-    for row in db.rows(sql(selRow), lastCommit, m):
-      if onlyFailing and row.len > 0 and row[row.high] == "reSuccess":
-        discard
-      else:
-        outfile.write("<tr>")
-        for x in row:
-          outfile.write(x.td)
-        outfile.write("</tr>")
-
-    outfile.write(TableFooter)
-    outfile.write("</div>")
-  outfile.write(HtmlEnd)
-  close(db)
-  close(outfile)
 
 proc generateJson*(filename: string, commit: int) =
   const
@@ -226,3 +428,4 @@ proc generateJson*(filename: string, commit: int) =
   outfile.writeLine "}"
   close(db)
   close(outfile)
+
