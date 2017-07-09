@@ -1,17 +1,4 @@
-import strutils, os
-
-proc largeStringSplit(s: string): seq[string] {.compileTime.} =
-  if s.isNil():
-    return nil
-  result = @[]
-  var startIdx = 0
-  while (startIdx < s.len) and (s.len - startIdx) > int16.high:
-    let newStartIdx = startIdx + int16.high
-    result.add(s[startIdx .. newStartIdx])
-    startIdx = newStartIdx + 1
-  let last = s[startIdx .. (s.len - 1)]
-  if last.len > 0:
-    result.add(last)
+import strutils, os, largeStringSplit
 
 const
   jquery_2_2_0_min_js_large = slurp("js" / "jquery-2.2.0.min.js")
