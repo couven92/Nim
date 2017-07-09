@@ -1,4 +1,4 @@
-import os, strutils, base64, largeStringSplit
+import os, strutils, base64, largestringsplit
 
 const
   bootstrap_min_js_large = slurp("js" / "bootstrap.min.js")

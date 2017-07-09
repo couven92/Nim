@@ -1,4 +1,4 @@
-import strutils, os, largeStringSplit
+import strutils, os, largestringsplit
 
 const
   jquery_2_2_0_min_js_large = slurp("js" / "jquery-2.2.0.min.js")
