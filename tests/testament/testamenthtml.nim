@@ -18,6 +18,127 @@ const
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Testament Test Results</title>""" 
   html_begin_2* = """
+    <script>
+        /**
+        * Callback function that is executed for each Element in an array.
+        * @callback executeForElement
+        * @param {Element} elem Element to operate on
+        */
+
+        /**
+        * 
+        * @param {number} index
+        * @param {Element[]} elemArray
+        * @param {executeForElement} executeOnItem
+        */
+        function executeAllAsync(elemArray, index, executeOnItem) {
+            for (var i = 0; index < elemArray.length && i < 100; i++ , index++) {
+                var item = elemArray[index];
+                executeOnItem(item);
+            }
+            if (index < elemArray.length) {
+                setTimeout(executeAllAsync, 0, elemArray, index, executeOnItem);
+            }
+        }
+
+        /** @param {Element} elem */
+        function executeShowOnElement(elem) {
+            while (elem.classList.contains("hidden")) {
+                elem.classList.remove("hidden");
+            }
+        }
+
+        /** @param {Element} elem */
+        function executeHideOnElement(elem) {
+            if (!elem.classList.contains("hidden")) {
+                elem.classList.add("hidden");
+            }
+        }
+
+        /** @param {Element} elem */
+        function executeExpandOnElement(elem) {
+            if (!elem.classList.contains("in")) {
+                elem.classList.add("in");
+            }
+        }
+
+        /** @param {Element} elem */
+        function executeCollapseOnElement(elem) {
+            while (elem.classList.contains("in")) {
+                elem.classList.remove("in");
+            }
+        }
+
+        /**
+        * @param {string} tabId The id of the tabpanel div to search.
+        * @param {string} [category] Optional bootstrap panel context class (danger, warning, info, success)
+        * @param {executeForElement} executeOnEachPanel
+        */
+        function wholePanelAll(tabId, category, executeOnEachPanel) {
+            var selector = "div.panel";
+            if (typeof category === "string" && category) {
+                selector += "-" + category;
+            }
+
+            var jqPanels = $(selector, $("#" + tabId));
+            /** @type {Element[]} */
+            var elemArray = jqPanels.toArray();
+
+            setTimeout(executeAllAsync, 0, elemArray, 0, executeOnEachPanel);
+        }
+
+        /**
+        * @param {string} tabId The id of the tabpanel div to search.
+        * @param {string} [category] Optional bootstrap panel context class (danger, warning, info, success)
+        * @param {executeForElement} executeOnEachPanel
+        */
+        function panelBodyAll(tabId, category, executeOnEachPanelBody) {
+            var selector = "div.panel";
+            if (typeof category === "string" && category) {
+                selector += "-" + category;
+            }
+
+            var jqPanels = $(selector, $("#" + tabId));
+
+            var jqPanelBodies = $("div.panel-body", jqPanels);
+            /** @type {Element[]} */
+            var elemArray = jqPanelBodies.toArray();
+
+            setTimeout(executeAllAsync, 0, elemArray, 0, executeOnEachPanelBody);
+        }
+
+        /**
+        * @param {string} tabId The id of the tabpanel div to search.
+        * @param {string} [category] Optional bootstrap panel context class (danger, warning, info, success)
+        */
+        function showAll(tabId, category) {
+            wholePanelAll(tabId, category, executeShowOnElement);
+        }
+
+        /**
+        * @param {string} tabId The id of the tabpanel div to search.
+        * @param {string} [category] Optional bootstrap panel context class (danger, warning, info, success)
+        */
+        function hideAll(tabId, category) {
+            wholePanelAll(tabId, category, executeHideOnElement);
+        }
+
+        /**
+        * @param {string} tabId The id of the tabpanel div to search.
+        * @param {string} [category] Optional bootstrap panel context class (danger, warning, info, success)
+        */
+        function expandAll(tabId, category) {
+            panelBodyAll(tabId, category, executeExpandOnElement);
+        }
+
+        /**
+        * @param {string} tabId The id of the tabpanel div to search.
+        * @param {string} [category] Optional bootstrap panel context class (danger, warning, info, success)
+        */
+        function collapseAll(tabId, category) {
+            panelBodyAll(tabId, category, executeCollapseOnElement);
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -69,6 +190,54 @@ const
                         $failedCount ($failedPercentage)
                     </dd>
                 </dl>
+                <div class="table-responsive">
+                    <table class="table table-condensed">
+                        <tr>
+                            <th class="text-right" style="vertical-align:middle">All Tests</th>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-default" type="button" onclick="showAll('tab-commit-$commitId-machine-$machineId');">Show All</button>
+                                    <button class="btn btn-default" type="button" onclick="hideAll('tab-commit-$commitId-machine-$machineId');">Hide All</button>
+                                    <button class="btn btn-default" type="button" onclick="expandAll('tab-commit-$commitId-machine-$machineId');">Expand All</button>
+                                    <button class="btn btn-default" type="button" onclick="collapseAll('tab-commit-$commitId-machine-$machineId');">Collapse All</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="text-right" style="vertical-align:middle">Successful Tests</th>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-default" type="button" onclick="showAll('tab-commit-$commitId-machine-$machineId', 'success');">Show All</button>
+                                    <button class="btn btn-default" type="button" onclick="hideAll('tab-commit-$commitId-machine-$machineId', 'success');">Hide All</button>
+                                    <button class="btn btn-default" type="button" onclick="expandAll('tab-commit-$commitId-machine-$machineId', 'success');">Expand All</button>
+                                    <button class="btn btn-default" type="button" onclick="collapseAll('tab-commit-$commitId-machine-$machineId', 'success');">Collapse All</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="text-right" style="vertical-align:middle">Skipped Tests</th>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-default" type="button" onclick="showAll('tab-commit-$commitId-machine-$machineId', 'info');">Show All</button>
+                                    <button class="btn btn-default" type="button" onclick="hideAll('tab-commit-$commitId-machine-$machineId', 'info');">Hide All</button>
+                                    <button class="btn btn-default" type="button" onclick="expandAll('tab-commit-$commitId-machine-$machineId', 'info');">Expand All</button>
+                                    <button class="btn btn-default" type="button" onclick="collapseAll('tab-commit-$commitId-machine-$machineId', 'info');">Collapse All</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="text-right" style="vertical-align:middle">Failed Tests</th>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-default" type="button" onclick="showAll('tab-commit-$commitId-machine-$machineId', 'danger');">Show All</button>
+                                    <button class="btn btn-default" type="button" onclick="hideAll('tab-commit-$commitId-machine-$machineId', 'danger');">Hide All</button>
+                                    <button class="btn btn-default" type="button" onclick="expandAll('tab-commit-$commitId-machine-$machineId', 'danger');">Expand All</button>
+                                    <button class="btn btn-default" type="button" onclick="collapseAll('tab-commit-$commitId-machine-$machineId', 'danger');">Collapse All</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
                 <div class="panel-group">"""
   html_testresult_panel_format* = """
                     <div id="panel-testResult-$trId" class="panel panel-$panelCtxClass">
