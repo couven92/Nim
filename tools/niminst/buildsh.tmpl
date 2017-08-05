@@ -153,7 +153,15 @@ case $ucpu in
   *power*|*ppc* )
     mycpu="powerpc" ;;
   *mips* )
-    mycpu="mips" ;;
+    mycpu="$("$CC" -dumpmachine | sed 's/-.*//')"
+    case $mycpu in
+      mips|mipsel|mips64|mips64el)
+        ;;
+      *)
+        echo 2>&1 "Error: unknown MIPS target: $mycpu"
+        exit 1
+    esac
+    ;;
   *arm*|*armv6l*|*armv71* )
     mycpu="arm" ;;
   *aarch64* )
