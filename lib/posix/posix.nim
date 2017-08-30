@@ -420,7 +420,19 @@ proc chown*(a1: cstring, a2: Uid, a3: Gid): cint {.importc, header: "<unistd.h>"
 proc close*(a1: cint | SocketHandle): cint {.importc, header: "<unistd.h>".}
 proc confstr*(a1: cint, a2: cstring, a3: int): int {.importc, header: "<unistd.h>".}
 proc crypt*(a1, a2: cstring): cstring {.importc, header: "<unistd.h>".}
-proc ctermid*(a1: cstring): cstring {.importc, header: "<unistd.h>".}
+when defined(android):
+  proc ctermid*(a1: cstring): cstring =
+    const tty = "/dev/tty"
+    if a1.isNil():
+      return tty
+    else:
+      var 
+        t: cstring = tty
+        p = cast[pointer](a1)
+      copyMem(p, cast[pointer](t), (tty.len + 1) * sizeof(char))
+      return a1
+else:
+  proc ctermid*(a1: cstring): cstring {.importc, header: "<unistd.h>".}
 proc dup*(a1: cint): cint {.importc, header: "<unistd.h>".}
 proc dup2*(a1, a2: cint): cint {.importc, header: "<unistd.h>".}
 proc encrypt*(a1: array[0..63, char], a2: cint) {.importc, header: "<unistd.h>".}
