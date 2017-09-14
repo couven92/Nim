@@ -1,0 +1,87 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "taskName": "Compile koch",
+            "command": "nim",
+            "args": [
+                "compile",
+                "--nimcache:nimcache/vscode_debug_koch",
+                "koch"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "taskName": "Compile koch (Release)",
+            "command": "nim",
+            "args": [
+                "compile",
+                "-d:release",
+                "--nimcache:nimcache/vscode_release_koch",
+                "koch"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "taskName": "Boot",
+            "dependsOn": "Compile koch",
+            "command": "koch",
+            "args": [
+                "boot"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "taskName": "Boot (Release)",
+            "dependsOn": "Compile koch",
+            "command": "koch",
+            "args": [
+                "boot",
+                "-d:release"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "taskName": "Compile nim0",
+            "command": "nim",
+            "args": [
+                "compile",
+                "--nimcache:nimcache/vscode_debug_nim0",
+                "-o:compiler/nim0",
+                "compiler/nim"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "taskName": "Compile testament",
+            "command": "nim",
+            "args": [
+                "compile",
+                "--taintMode:on",
+                "-d:nimCoroutines",
+                "tests/testament/tester"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "problemMatcher": "$tsc-watch"
+        }
+    ]
+}

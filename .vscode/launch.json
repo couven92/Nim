@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "koch (WinDbg)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/koch.exe",
+            "args": [
+                "--help"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceRoot}",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "Compile koch"
+        },
+        {
+            "name": "nim0 (WinDbg)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/compiler/nim0.exe",
+            "args": [
+                "--help"
+            ],
+            "stopAtEntry": true,
+            "cwd": "${workspaceRoot}",
+            "environment": [],
+            "externalConsole": true,
+            "preLaunchTask": "Compile nim0"
+        }
+    ]
+}
