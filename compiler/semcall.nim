@@ -77,12 +77,16 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
       best.state = csNoMatch
       break
     else:
+      GC_unref(sym)
       sym = nextOverloadIter(o, c, headSymbol)
+      if not sym.isNil(): GC_ref(sym)
       scope = o.lastOverloadScope
   var z: TCandidate
   while sym != nil:
     if sym.kind notin filter:
+      GC_unref(sym)
       sym = nextOverloadIter(o, c, headSymbol)
+      if not sym.isNil(): GC_ref(sym)
       scope = o.lastOverloadScope
       continue
     determineType(c, sym)
@@ -99,6 +103,7 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
           if cmp < 0: best = z   # x is better than the best so far
           elif cmp == 0: alt = z # x is as good as the best so far
       elif errors != nil or z.diagnostics != nil:
+        if not sym.isNil(): GC_ref(sym)
         errors.safeAdd(CandidateError(
           sym: sym,
           unmatchedVarParam: int z.mutabilityProblem,
@@ -106,21 +111,30 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
     else:
       # Symbol table has been modified. Restart and pre-calculate all syms
       # before any further candidate init and compare. SLOW, but rare case.
-      if not syms.isNil(): GC_unref(syms)
+      if not syms.isNil():
+        GC_unref(syms)
+        for symtuple in syms: GC_unref(symtuple.s)
       syms = initCandidateSymbols(c, headSymbol, initialBinding, filter,
                                   best, alt, o, diagnosticsFlag)
       GC_ref(syms)
+      for symtuple in syms: GC_ref(symtuple.s)
     if syms == nil:
       sym = nextOverloadIter(o, c, headSymbol)
+      if not sym.isNil(): GC_ref(sym)
       scope = o.lastOverloadScope
     elif nextSymIndex < syms.len:
       # rare case: retrieve the next pre-calculated symbol
+      GC_unref(sym)
       sym = syms[nextSymIndex].s
+      if not sym.isNil(): GC_ref(sym)
       scope = syms[nextSymIndex].scope
       nextSymIndex += 1
     else:
       break
-  if not syms.isNil(): GC_unref(syms)
+  if not sym.isNil(): GC_unref(sym)
+  if not syms.isNil():
+    GC_unref(syms)
+    for symtuple in syms: GC_unref(symtuple.s)
 
 proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
                             (TPreferedDesc, string) =
