@@ -106,8 +106,10 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
     else:
       # Symbol table has been modified. Restart and pre-calculate all syms
       # before any further candidate init and compare. SLOW, but rare case.
+      if not syms.isNil(): GC_unref(syms)
       syms = initCandidateSymbols(c, headSymbol, initialBinding, filter,
                                   best, alt, o, diagnosticsFlag)
+      GC_ref(syms)
     if syms == nil:
       sym = nextOverloadIter(o, c, headSymbol)
       scope = o.lastOverloadScope
@@ -118,6 +120,7 @@ proc pickBestCandidate(c: PContext, headSymbol: PNode,
       nextSymIndex += 1
     else:
       break
+  if not syms.isNil(): GC_unref(syms)
 
 proc presentFailedCandidates(c: PContext, n: PNode, errors: CandidateErrors):
                             (TPreferedDesc, string) =
