@@ -6,7 +6,7 @@
 #    Look at license.txt for more info.
 #    All rights reserved.
 
-import strutils, os, osproc, json
+import strutils, os, osproc, json, times
 
 type
   MachineId* = distinct string
@@ -19,6 +19,7 @@ var
   thisMachine: MachineId
   thisCommit: CommitId
   thisBranch: string
+  thisTestRunId*: string
 
 {.experimental.}
 proc `()`(cmd: string{lit}): string = cmd.execProcess.string.strip
@@ -46,20 +47,33 @@ var
   entries: int
 
 proc writeTestResult*(name, category, target,
-                      action, result, expected, given: string) =
+                      action, result, expected, given: string,
+                      timestamp: Time) =
   createDir("testresults")
   if currentCategory != category:
     if currentCategory.len > 0:
       results.writeLine("]")
       close(results)
     currentCategory = category
-    results = open("testresults" / category.addFileExt"json", fmWrite)
-    results.writeLine("[")
+    let filename = "testresults" / category.addFileExt"json"
+    if fileExists(filename):
+      results = open(filename, fmReadWriteExisting)
+      const bracketCloseLen = "]\n".len()
+      if results.getFileSize() > bracketCloseLen:
+        results.setFilePos(-bracketCloseLen, fspEnd) # Overwrite the ] at the end of the file
+        results.writeLine(",")
+      else:
+        results.writeLine("[")
+    else:
+      results = open(filename, fmWrite)
+      results.writeLine("[")
     entries = 0
 
   let jentry = %*{"name": name, "category": category, "target": target,
     "action": action, "result": result, "expected": expected, "given": given,
-    "machine": thisMachine.string, "commit": thisCommit.string, "branch": thisBranch}
+    "machine": thisMachine.string, "commit": thisCommit.string, "branch": thisBranch,
+    "os": hostOS, "cpu": hostCPU, "timestamp": $timestamp,
+    "testrun": thisTestRunId}
   if entries > 0:
     results.writeLine(",")
   results.write($jentry)

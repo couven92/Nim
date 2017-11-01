@@ -9,7 +9,7 @@
 
 ## HTML generator for the tester.
 
-import cgi, backend, strutils, json, os
+import cgi, backend, strutils, json, os, tables
 
 import "testamenthtml.templ"
 
@@ -18,6 +18,7 @@ proc generateTestRunTabListItemPartial(outfile: File, testRunRow: JsonNode, firs
     # The first tab gets the bootstrap class for a selected tab
     firstTabActiveClass = if firstRow: "active"
                           else: ""
+    testrunid = testRunRow["testrun"].str
     commitId = htmlQuote testRunRow["commit"].str
     hash = htmlQuote(testRunRow["commit"].str)
     branch = htmlQuote(testRunRow["branch"].str)
@@ -26,6 +27,7 @@ proc generateTestRunTabListItemPartial(outfile: File, testRunRow: JsonNode, firs
 
   outfile.generateHtmlTabListItem(
       firstTabActiveClass,
+      testrunid,
       commitId,
       machineId,
       branch,
@@ -35,15 +37,21 @@ proc generateTestRunTabListItemPartial(outfile: File, testRunRow: JsonNode, firs
 
 proc generateTestResultPanelPartial(outfile: File, testResultRow: JsonNode, onlyFailing = false) =
   let
-    trId = htmlQuote(testResultRow["category"].str & "_" & testResultRow["name"].str)
+    trId = htmlQuote(
+      testResultRow["testrun"].str &
+      "-" &
+      testResultRow["category"].str &
+      "_" &
+      testResultRow["name"].str
+      ).multiReplace({".": "_", " ": "_", ":": "_"})
     name = testResultRow["name"].str.htmlQuote()
     category = testResultRow["category"].str.htmlQuote()
     target = testResultRow["target"].str.htmlQuote()
     action = testResultRow["action"].str.htmlQuote()
     result = htmlQuote testResultRow["result"].str
-    expected = htmlQuote testResultRow["expected"].str
-    gotten = htmlQuote testResultRow["given"].str
-    timestamp = "unknown"
+    expected = testResultRow["expected"].str
+    gotten = testResultRow["given"].str
+    timestamp = htmlQuote testResultRow["timestamp"].str
   var panelCtxClass, textCtxClass, bgCtxClass, resultSign, resultDescription: string
   case result
   of "reSuccess":
@@ -85,72 +93,98 @@ proc generateTestResultPanelPartial(outfile: File, testResultRow: JsonNode, only
   outfile.generateHtmlTestresultPanelEnd()
 
 type
-  AllTests = object
+  TestRunAllTests = object
     data: JSonNode
     totalCount, successCount, ignoredCount, failedCount: int
     successPercentage, ignoredPercentage, failedPercentage: BiggestFloat
+  AllTests = seq[TestRunAllTests]
 
 proc allTestResults(): AllTests =
-  result.data = newJArray()
+  var testRunTable = newOrderedTable[string, TestRunAllTests]()
   for file in os.walkFiles("testresults/*.json"):
-    let data = parseFile(file)
+    var data: JsonNode
+    try: data = parseFile(file)
+    except JsonParsingError:
+      echo "[ERROR] JSON parsing error: ", getCurrentExceptionMsg()
+      continue
     if data.kind != JArray:
       echo "[ERROR] ignoring json file that is not an array: ", file
     else:
       for elem in data:
-        result.data.add elem
+        let testRunId = elem["testrun"].str
+        var
+          newTestRun = false
+          testRun: TestRunAllTests
+        if testRunId notin testRunTable:
+          testRun.data = newJArray()
+          newTestRun = true
+        else:
+          testRun = testRunTable[testRunId]
+        testRun.data.add elem
         let state = elem["result"].str
-        if state.contains("reSuccess"): inc result.successCount
-        elif state.contains("reIgnored"): inc result.ignoredCount
-
-  result.totalCount = result.data.len
-  result.successPercentage = 100 * (result.successCount.toBiggestFloat() / result.totalCount.toBiggestFloat())
-  result.ignoredPercentage = 100 * (result.ignoredCount.toBiggestFloat() / result.totalCount.toBiggestFloat())
-  result.failedCount = result.totalCount - result.successCount - result.ignoredCount
-  result.failedPercentage = 100 * (result.failedCount.toBiggestFloat() / result.totalCount.toBiggestFloat())
+        if state.contains("reSuccess"): inc testRun.successCount
+        elif state.contains("reIgnored"): inc testRun.ignoredCount
+        testRunTable[testRunId] = testRun
+  result.newSeq(testRunTable.len())
+  var i = testRunTable.len() - 1
+  for id, run in testRunTable:
+    var resultRun: TestRunAllTests
+    resultRun = run
+    resultRun.totalCount = resultRun.data.len()
+    resultRun.successPercentage = 100 * (resultRun.successCount.toBiggestFloat() / resultRun.totalCount.toBiggestFloat())
+    resultRun.ignoredPercentage = 100 * (resultRun.ignoredCount.toBiggestFloat() / resultRun.totalCount.toBiggestFloat())
+    resultRun.failedCount = resultRun.totalCount - resultRun.successCount - resultRun.ignoredCount
+    resultRun.failedPercentage = 100 * (resultRun.failedCount.toBiggestFloat() / resultRun.totalCount.toBiggestFloat())
+    # Reverse order: last in table will be most recent
+    result[i] = resultRun
+    dec i
 
 
 proc generateTestResultsPanelGroupPartial(outfile: File, allResults: JsonNode, onlyFailing = false) =
   for testresultRow in allResults:
     generateTestResultPanelPartial(outfile, testresultRow, onlyFailing)
 
-proc generateTestRunTabContentPartial(outfile: File, allResults: AllTests, testRunRow: JsonNode, onlyFailing = false, firstRow = false) =
+proc generateTestRunTabContentPartial(outfile: File, allResults: TestRunAllTests, testRunRow: JsonNode, onlyFailing = false, firstRow = false) =
   let
     # The first tab gets the bootstrap classes for a selected and displaying tab content
     firstTabActiveClass = if firstRow: " in active"
                           else: ""
+    testrunid = testRunRow["testrun"].str
     commitId = htmlQuote testRunRow["commit"].str
     hash = htmlQuote(testRunRow["commit"].str)
     branch = htmlQuote(testRunRow["branch"].str)
     machineId = htmlQuote testRunRow["machine"].str
     machineName = htmlQuote(testRunRow["machine"].str)
-    os = htmlQuote("unknown_os")
-    cpu = htmlQuote("unknown_cpu")
+    os = htmlQuote(testRunRow["os"].str)
+    cpu = htmlQuote(testRunRow["cpu"].str)
 
   outfile.generateHtmlTabPageBegin(
-    firstTabActiveClass, commitId,
+    firstTabActiveClass, testrunid, commitId,
     machineId, branch, hash, machineName, os, cpu,
     allResults.totalCount,
     allResults.successCount, formatBiggestFloat(allResults.successPercentage, ffDecimal, 2) & "%",
     allResults.ignoredCount, formatBiggestFloat(allResults.ignoredPercentage, ffDecimal, 2) & "%",
-    allResults.failedCount, formatBiggestFloat(allResults.failedPercentage, ffDecimal, 2) & "%"
+    allResults.failedCount, formatBiggestFloat(allResults.failedPercentage, ffDecimal, 2) & "%",
+    onlyFailing
   )
   generateTestResultsPanelGroupPartial(outfile, allResults.data, onlyFailing)
   outfile.generateHtmlTabPageEnd()
 
 proc generateTestRunsHtmlPartial(outfile: File, allResults: AllTests, onlyFailing = false) =
-  # Iterating the results twice, get entire result set in one go
   outfile.generateHtmlTabListBegin()
-  if allResults.data.len > 0:
-    generateTestRunTabListItemPartial(outfile, allResults.data[0], true)
+  var first = true
+  for testRun in allResults:
+    if testRun.data.len > 0:
+      generateTestRunTabListItemPartial(outfile, testRun.data[0], first)
+      first = false
   outfile.generateHtmlTabListEnd()
 
   outfile.generateHtmlTabContentsBegin()
-  var firstRow = true
-  for testRunRow in allResults.data:
-    generateTestRunTabContentPartial(outfile, allResults, testRunRow, onlyFailing, firstRow)
-    if firstRow:
-      firstRow = false
+  first = true
+  for testRun in allResults:
+    if testRun.data.len < 1: continue
+    generateTestRunTabContentPartial(outfile, testRun, testRun.data[0], onlyFailing, first)
+    first = false
   outfile.generateHtmlTabContentsEnd()
 
 proc generateHtml*(filename: string, onlyFailing: bool) =
